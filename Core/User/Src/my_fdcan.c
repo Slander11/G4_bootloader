@@ -63,7 +63,11 @@ uint8_t upgrade = 0;
 uint8_t flash_move_start = 0;
 /* 升级完成 */
 uint8_t ota_move_end = 0;
-
+/* 返回得报文 */
+uint8_t ReturnPackets_Ok[5] = {0x02, 0xfd, 0x01, 0x03, 0xfc};
+uint8_t ReturnPackets_Ng[5] = {0x02, 0xfd, 0x02, 0x03, 0xfc};
+uint8_t ReturnPackets_Hand[5] = {0x02, 0xfd, 0x03, 0x03, 0xfc};
+uint8_t ReturnPackets_End[5] = {0x02, 0xfd, 0x04, 0x03, 0xfc};
 /* 握手成功 */
 uint8_t hand_suc = 0;
 uint8_t g_sucdata[64] = {0};
@@ -195,8 +199,9 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         /* 判断canid是否为本身id */
         uint32_t t_canid = 0x100;
         t_canid = t_canid | g_sucdata[43];
-        if (0x195 != t_canid)
+        if (0x201 != t_canid)
         {
+            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return id_error;
         }
 
@@ -206,6 +211,7 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         t_head[1] = g_sucdata[1];
         if ((t_head[0] != 0x02) || (t_head[1] != 0xfd))
         {
+            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return no_begin;
         }
 
@@ -215,6 +221,7 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         t_size[1] = g_sucdata[3];
         if ((t_size[0] != 0x00) || (t_size[1] != 0x30))
         {
+            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return no_len;
         }
 
@@ -224,6 +231,7 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         t_tail[1] = g_sucdata[47];
         if ((t_tail[0] != 0x03) || (t_tail[1] != 0xfc))
         {
+            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return no_end;
         }
 
@@ -232,6 +240,7 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         uint16_t t2_crc = CRC16_Verification(g_sucdata,44);
         if(t1_crc != t2_crc)
         {
+            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return crc_error;
         }
 
@@ -239,6 +248,7 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         uint8_t t_type = g_sucdata[5];
         if (t_type != 0x03)
         {
+            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return data_error;
         }
 
@@ -247,6 +257,7 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         static uint16_t s_last_ordinal_num = 0;
         if ((t_ordinal_num <= s_last_ordinal_num) && (t_ordinal_num != 0))
         {
+            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return data_error;
         }
         s_last_ordinal_num = t_ordinal_num;
@@ -258,21 +269,21 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         if (t_id == 0x01)
         {
             upgrade = 1;
-            uint32_t t_canid = 0x100;
-            t_canid = t_canid | g_sucdata[43];
-            CAN_Send_Msg(t_canid,g_sucdata,FDCAN_DLC_BYTES_48);
+            CAN_Send_Msg(t_canid,ReturnPackets_Hand,FDCAN_DLC_BYTES_5);
             return hand_shake;
         }
 
         /* 数据帧 */
         else if (0x02 == t_id)
         {
+            CAN_Send_Msg(t_canid,ReturnPackets_Ok,FDCAN_DLC_BYTES_5);
             return enough;
         }
 
         /* 结束帧 */
         else if(0x03 == t_id)
         {
+            CAN_Send_Msg(t_canid,ReturnPackets_End,FDCAN_DLC_BYTES_5);
             ota_move_end = 1;
             return over;
         }
