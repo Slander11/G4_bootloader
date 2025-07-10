@@ -36,6 +36,8 @@ static uint32_t Read_Start_Mode(void);
 
 /*  user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+extern uint8_t ReturnPackets_Ok[5];
+extern uint32_t g_devid;
 /* USER CODE END 0 */
 
 /**
@@ -177,7 +179,7 @@ void Data_transfer(void)
             /* 判断定时器是否超时 */
             if(bsp_CheckTimer(SOFT_TIME1))
             {
-                HAL_GPIO_TogglePin(LED_GPIO_Port,LED_Pin);
+                HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin);
             }
 
             /* 判断升级是否完成 */
@@ -207,10 +209,10 @@ void Data_transfer(void)
         /* 地址递增 */
         flash_write_addr += 32;
 
-        /* 返回接收信息 */
-        uint32_t t_canid = 0x100;
-        t_canid = t_canid | g_sucdata[43];
-        CAN_Send_Msg(t_canid,g_sucdata,FDCAN_DLC_BYTES_48);
+        HAL_Delay(5);
+
+        CAN_Send_Msg(g_devid,ReturnPackets_Ok,FDCAN_DLC_BYTES_5);
+
     }
 }
 

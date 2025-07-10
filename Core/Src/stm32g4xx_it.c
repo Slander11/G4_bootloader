@@ -85,11 +85,27 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+  volatile uint32_t counter = 0;  // 定义一个volatile变量，用于计数
+  volatile uint32_t state = 0;    // 定义一个volatile变量，用于表示状态
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
     /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+    counter++;  // 每次进入HardFault时，计数器加1
+
+    if (counter >= 1000000) {
+      counter = 0;  // 重置计数器
+      state = !state;  // 切换状态
+
+      // 根据状态进行相应的操作
+      if (state) {
+        // 状态为1时的处理
+        HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+      } else {
+        // 状态为0时的处理
+        HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+      }
+    }
     /* USER CODE END W1_HardFault_IRQn 0 */
   }
 }

@@ -71,6 +71,8 @@ uint8_t ReturnPackets_End[5] = {0x02, 0xfd, 0x04, 0x03, 0xfc};
 /* 握手成功 */
 uint8_t hand_suc = 0;
 uint8_t g_sucdata[64] = {0};
+
+uint32_t g_devid = 0x36;
 /* USER CODE END 0 */
 
 /**
@@ -102,8 +104,8 @@ static void CAN_filter_init()
     sFilterConfig.FilterIndex = 0;                        // 滤波器索引
     sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0; // 过滤器0关联到FIFO0
     sFilterConfig.FilterType = FDCAN_FILTER_MASK;         // 掩码过滤
-    sFilterConfig.FilterID1 = 0x222;
-    sFilterConfig.FilterID2 = 0x7ff;
+    sFilterConfig.FilterID1 = 0x099;
+    sFilterConfig.FilterID2 = 0xff;
 
     HAL_Status = HAL_FDCAN_ConfigFilter(&hfdcan1, &sFilterConfig);
     if (HAL_Status != HAL_OK)
@@ -128,7 +130,7 @@ uint8_t CAN_Send_Msg(uint32_t id, uint8_t *msg, uint32_t len)
     TXHeader.TxFrameType = FDCAN_DATA_FRAME;
     TXHeader.DataLength = len;
     TXHeader.ErrorStateIndicator = FDCAN_ESI_PASSIVE;
-    TXHeader.BitRateSwitch = FDCAN_BRS_ON;
+    TXHeader.BitRateSwitch = FDCAN_BRS_OFF;
     TXHeader.FDFormat = FDCAN_FD_CAN;
     TXHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     TXHeader.MessageMarker = 0x00;
@@ -197,11 +199,11 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         }
 
         /* 判断canid是否为本身id */
-        uint32_t t_canid = 0x100;
+        uint8_t t_canid = 0x20;
         t_canid = t_canid | g_sucdata[43];
-        if (0x201 != t_canid)
+        if (g_devid != t_canid)
         {
-            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
+            // CAN_Send_Msg(g_devid,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return id_error;
         }
 
@@ -211,7 +213,7 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         t_head[1] = g_sucdata[1];
         if ((t_head[0] != 0x02) || (t_head[1] != 0xfd))
         {
-            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
+            CAN_Send_Msg(g_devid,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return no_begin;
         }
 
@@ -221,7 +223,7 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         t_size[1] = g_sucdata[3];
         if ((t_size[0] != 0x00) || (t_size[1] != 0x30))
         {
-            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
+            CAN_Send_Msg(g_devid,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return no_len;
         }
 
@@ -231,7 +233,7 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         t_tail[1] = g_sucdata[47];
         if ((t_tail[0] != 0x03) || (t_tail[1] != 0xfc))
         {
-            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
+            CAN_Send_Msg(g_devid,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return no_end;
         }
 
@@ -240,15 +242,15 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         uint16_t t2_crc = CRC16_Verification(g_sucdata,44);
         if(t1_crc != t2_crc)
         {
-            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
+            CAN_Send_Msg(g_devid,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return crc_error;
         }
 
         /* 获取报文类型 */
         uint8_t t_type = g_sucdata[5];
-        if (t_type != 0x03)
+        if (t_type != 0x53)
         {
-            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
+            CAN_Send_Msg(g_devid,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return data_error;
         }
 
@@ -257,7 +259,7 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         static uint16_t s_last_ordinal_num = 0;
         if ((t_ordinal_num <= s_last_ordinal_num) && (t_ordinal_num != 0))
         {
-            CAN_Send_Msg(0x200,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
+            CAN_Send_Msg(g_devid,ReturnPackets_Ng,FDCAN_DLC_BYTES_5);
             return data_error;
         }
         s_last_ordinal_num = t_ordinal_num;
@@ -265,26 +267,21 @@ static uint8_t GET_FDCAN_DATA(FDCAN_RxHeaderTypeDef *RxHeader,uint8_t *TXmessage
         /* 判断指令id */
         uint8_t t_id = g_sucdata[10];
 
-        /* 握手帧 */
-        if (t_id == 0x01)
-        {
-            upgrade = 1;
-            CAN_Send_Msg(t_canid,ReturnPackets_Hand,FDCAN_DLC_BYTES_5);
+        if (0x01 == t_id){              /* 握手帧 */
+            uint8_t temp = 1;
+            temp = CAN_Send_Msg(g_devid,ReturnPackets_Hand,FDCAN_DLC_BYTES_5);
+            if (temp == 0) {
+                upgrade = 1;
+            }
             return hand_shake;
-        }
-
-        /* 数据帧 */
-        else if (0x02 == t_id)
-        {
-            CAN_Send_Msg(t_canid,ReturnPackets_Ok,FDCAN_DLC_BYTES_5);
+        }else if (0x02 == t_id){        /* 数据帧 */
             return enough;
-        }
-
-        /* 结束帧 */
-        else if(0x03 == t_id)
-        {
-            CAN_Send_Msg(t_canid,ReturnPackets_End,FDCAN_DLC_BYTES_5);
-            ota_move_end = 1;
+        }else if(0x03 == t_id) {        /* 结束帧 */
+            uint8_t temp = 1;
+            temp = CAN_Send_Msg(g_devid,ReturnPackets_End,FDCAN_DLC_BYTES_5);
+            if (temp == 0) {
+                ota_move_end = 1;
+            }
             return over;
         }
     }

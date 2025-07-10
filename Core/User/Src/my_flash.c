@@ -176,7 +176,7 @@ void flash_NoErase_Write(uint32_t waddr, uint64_t *pbuf, uint32_t length)
             {
                 while (1)
                 {
-                    HAL_GPIO_TogglePin(LED_GPIO_Port,LED_Pin);
+                    HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin);
                     HAL_Delay(1000);
                 }
                 break; /* 写入异常 */
